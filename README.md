@@ -4,7 +4,7 @@
 
 ## 下書き
 
-- [asdf-extrasを作った理由と、asdfを拡張する構成](articles/94e055ccd77acd.md)
+- [asdf-extrasを作った理由と、shell functionで拡張する設計](articles/94e055ccd77acd.md)
 - [asdf-extrasの品質をGitHub Actionsで確かめる](articles/asdf-extras-github-actions-quality.md)
 - [AIとシェルツールを開発するために、リポジトリへ書いたルール](articles/asdf-extras-ai-development.md)
 
