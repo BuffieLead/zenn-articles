@@ -234,28 +234,40 @@ asdf install -p nodejs 24.11.0
 
 ### インストール時の環境変数とフックを設定する
 
-ツールによっては、ビルド時の環境変数や事前処理も決めておきたいことがあります。asdf-extrasでは、プラグイン別の環境ファイルを読み込み、その中で定義した関数をインストール前に呼び出せます。
+ツールによっては、ビルド時の環境変数や事前処理も決めておきたいことがあります。asdf-extrasでは、`ASDF_EXTRAS_INSTALL_ENV_FUNCTION_<PLUGIN>`で指定した関数を、インストール前に呼び出せます。関数はBashから引き継ぐ方法と、プラグイン別の環境ファイルで定義する方法があります。
 
-**環境ファイルは、普段使っているシェルにかかわらずBashの構文で記述してください。** ファイルの読み込みとフック関数の実行は、asdf-extras側のBashで行います。ZshやFishなどの起動設定に定義した関数が、そのまま使えるわけではありません。フック関数本体は以下のように環境ファイル内へ定義し、`ASDF_EXTRAS_INSTALL_ENV_FUNCTION_<PLUGIN>`にはその関数名を指定します。
+環境ファイルはasdf-extras側のBashで`source`します。`export CC=clang`のようなPOSIX準拠の記述も使えますが、読み込み先に合わせてBashの構文で書くことを推奨します。普段使っているシェルがBashである必要はありません。
 
-環境ファイルの既定の配置先は、`${ASDF_DATA_DIR:-$HOME/.asdf}/asdf-extras/install/env/<plugin>.env`です。次は、Node.jsのビルド時に使うコンパイラを指定する例です。`clang`が使える環境を想定しているので、内容は自分のビルド環境に合わせてください。
+注意したいのは、**関数名を環境変数で渡すことと、関数本体をBashへ引き継ぐことは別**という点です。Zsh、Fish、Elvish、Nushellなどで定義した関数やカスタムコマンドは、関数名を環境変数に設定しても、asdf-extras側のBashからは呼び出せません。また、関数定義や環境変数の設定構文もシェルごとに異なるため、以下の`~/.bashrc`向けの例をそのまま他のシェルの起動設定へ書くことはできません。
+
+普段のシェルがBashなら、`~/.bashrc`などに定義した関数を使う方法もあります。必要なのは、フックを実行するBashからその関数を参照できることです。次は、`export -f`で関数の引き継ぎを明示する設定例です。`clang`が使える環境を想定しているので、内容は自分のビルド環境に合わせてください。
 
 ~~~bash
-mkdir -p "${ASDF_DATA_DIR:-$HOME/.asdf}/asdf-extras/install/env"
-
-cat >"${ASDF_DATA_DIR:-$HOME/.asdf}/asdf-extras/install/env/nodejs.env" <<'EOF'
 nodejs_build_env() {
     export CC=clang
     export CXX=clang++
 }
-EOF
-~~~
-
-呼び出す関数名は、次の環境変数で指定します。BashやZshでは、この`export`を`~/.bashrc`や`~/.zshrc`へ追加し、現在のシェルでも実行します。Fishなどでは、環境変数を渡す設定だけをそのシェルの構文に合わせてください。環境ファイル内の関数定義はBash構文のままです。
-
-~~~bash
+export -f nodejs_build_env
 export ASDF_EXTRAS_INSTALL_ENV_FUNCTION_NODEJS=nodejs_build_env
 ~~~
+
+`export -f`は関数本体を子プロセスのBashへ引き継ぐための指定で、もう一方の`export`は呼び出す関数名を渡すための指定です。起動設定や実行経路によって、すでにフック側から関数を参照できる場合は、追加の`export -f`なしで動作することもあります。`.bashrc`に書いた関数が常に自動で読み込まれると想定せず、フックを実行するBashから参照できるかを確認してください。
+
+Bash以外のシェルを使っている場合は、次のように環境ファイル内で関数を定義できます。こちらは普段のシェルから関数本体を引き継ぐ必要がありません。
+
+環境ファイルの既定の配置先は、`~/.asdf/asdf-extras/install/env/<plugin>.env`です。`ASDF_DATA_DIR`を設定している場合は、`~/.asdf`の部分をそのディレクトリに読み替えてください。必要なディレクトリと`nodejs.env`をエディタなどで作成し、次の内容を保存します。これは起動中のシェルへ入力するコマンドではなく、Bashが読み込むファイルの内容です。Nushellなどを使っていても、ファイル内はこの構文で記述します。
+
+~~~bash
+nodejs_build_env() {
+    export CC=clang
+    export CXX=clang++
+}
+ASDF_EXTRAS_INSTALL_ENV_FUNCTION_NODEJS=nodejs_build_env
+~~~
+
+この例では、関数本体と、呼び出す関数名の指定を同じ環境ファイルに書いています。ファイルを読み込んだ後に関数名を取得するため、この指定も有効です。同じBash内で参照するので、関数名の変数を`export`する必要もありません。
+
+環境変数の設定だけで済む場合は、関数を用意せず、環境ファイルへ直接`export CC=clang`などと書けば十分です。関数は、引数のプラグイン名やバージョンに応じて処理を変えたい場合などに使えます。
 
 この状態でextras経由のインストールを行うと、`nodejs.env`を読み込んでから`nodejs_build_env`を呼び出し、その環境でインストールします。関数には、第一引数にプラグイン名、第二引数に解決済みのバージョンが渡されます。
 
@@ -263,7 +275,7 @@ export ASDF_EXTRAS_INSTALL_ENV_FUNCTION_NODEJS=nodejs_build_env
 asdf install -u nodejs 24.11.0
 ~~~
 
-**この設定は`update`のインストール処理でも使われます。** 次のような個別更新や一括更新でも、Node.jsのインストールが必要になれば同じ環境ファイルとフックが適用されます。
+**どちらの方法も、`update`のインストール処理で使われます。** 次のような個別更新や一括更新でも、Node.jsのインストールが必要になれば、設定したフックが呼び出されます。
 
 ~~~bash
 asdf update nodejs
