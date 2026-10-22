@@ -3,7 +3,7 @@ title: "asdf update を再実装した話(紹介編)"
 emoji: "🧰"
 type: "tech"
 topics: [asdf, shell, cli, oss]
-published: false
+published: true
 ---
 
 [asdf](https://asdf-vm.com/)で複数のツールを管理していると、更新のたびにプラグインを更新し、新しいバージョンをインストールし、使用するバージョンを設定することになります。この手間をまとめたくて、[asdf-extras](https://github.com/eihu0F/asdf-extras)を作りました。
