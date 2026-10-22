@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zenn CLI Preview</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-bottom: 1px solid #888; }
+  h1 { font-size: 1rem; margin: 0; }
+  select { max-width: min(70vw, 420px); }
+  select, button { font: inherit; padding: 6px; }
+  :focus-visible { outline: 3px solid #3ea8ff; outline-offset: 2px; }
+  #status { margin: 0; padding: 6px 12px; font-size: .85rem; }
+  iframe { flex: 1; width: 100%; border: 0; background: white; }
+</style>
+<header>
+  <h1>Zenn CLI Preview</h1>
+  <label for="article">記事</label>
+  <select id="article"><option value="">記事一覧</option></select>
+  <button id="refresh" type="button">再読み込み</button>
+</header>
+<p id="status" role="status" aria-live="polite">読み込み中…</p>
+<iframe id="preview" title="Zenn 記事のプレビュー" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+<script>
+  const select = document.getElementById('article');
+  const frame = document.getElementById('preview');
+  const status = document.getElementById('status');
+  let revision = -1;
+  let slugs = '';
+  function show(state) {
+    const nextSlugs = JSON.stringify(state.articles);
+    if (nextSlugs !== slugs) {
+      select.replaceChildren(new Option('記事一覧', ''), ...state.articles.map(slug => new Option(slug, slug)));
+      slugs = nextSlugs;
+    }
+    select.value = state.article || '';
+    if (revision !== state.revision) {
+      frame.src = state.article ? `/articles/${encodeURIComponent(state.article)}?canvasRevision=${state.revision}` : '/articles';
+      revision = state.revision;
+    }
+    status.textContent = state.error || 'Zenn CLI 起動中 · ファイルの保存で自動更新';
+    status.setAttribute('role', state.error ? 'alert' : 'status');
+  }
+  async function request(path, options) {
+    const response = await fetch(`/__zenn_canvas/${path}`, options);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    show(data);
+  }
+  function report(error) {
+    status.textContent = `プレビューエラー: ${error.message}`;
+    status.setAttribute('role', 'alert');
+  }
+  select.addEventListener('change', async () => {
+    try {
+      await request('select', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(select.value ? { article: select.value } : {}),
+      });
+    } catch (error) { report(error); }
+  });
+  document.getElementById('refresh').addEventListener('click', () => {
+    if (frame.src) frame.src = frame.src;
+  });
+  async function poll() {
+    try { await request('state'); } catch (error) { report(error); }
+    setTimeout(poll, 1500);
+  }
+  poll();
+</script>
+</html>
